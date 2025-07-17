@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
-import { blink } from '../lib/blink'
+import { blink, getUserProfile, getUserBooks, getEmailSubscribers, getDownloadStats, createUserProfile } from '../lib/blink'
 import { 
   BookOpen, 
   Mail, 
@@ -29,11 +29,51 @@ interface DashboardProps {
 export default function Dashboard({ onNavigate }: DashboardProps) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const [stats, setStats] = useState({
+    totalBooks: 0,
+    emailSubscribers: 0,
+    downloads: 0,
+    revenue: 0
+  })
+
+  const loadUserData = async (userId: string) => {
+    try {
+      // Try to get user profile, create if doesn't exist
+      let profile
+      try {
+        profile = await getUserProfile(userId)
+      } catch (error) {
+        // Profile doesn't exist, create it
+        const userData = await blink.auth.me()
+        profile = await createUserProfile(userData)
+      }
+
+      // Load user stats
+      const [books, subscribers, downloadStats] = await Promise.all([
+        getUserBooks(userId),
+        getEmailSubscribers(userId),
+        getDownloadStats(userId)
+      ])
+
+      setStats({
+        totalBooks: books.length,
+        emailSubscribers: subscribers.length,
+        downloads: downloadStats.length,
+        revenue: 0 // TODO: Calculate from subscriptions/sales
+      })
+    } catch (error) {
+      console.error('Error loading user data:', error)
+    }
+  }
 
   useEffect(() => {
     const unsubscribe = blink.auth.onAuthStateChanged((state) => {
       setUser(state.user)
       setLoading(state.isLoading)
+      
+      if (state.user && !state.isLoading) {
+        loadUserData(state.user.id)
+      }
     })
     return unsubscribe
   }, [])
@@ -69,31 +109,31 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
     )
   }
 
-  const stats = [
+  const statsData = [
     {
       title: "Total Books",
-      value: "0",
+      value: stats.totalBooks.toString(),
       change: "+0%",
       icon: BookOpen,
       color: "text-blue-500"
     },
     {
       title: "Email Subscribers",
-      value: "0",
+      value: stats.emailSubscribers.toString(),
       change: "+0%",
       icon: Users,
       color: "text-green-500"
     },
     {
       title: "Downloads",
-      value: "0",
+      value: stats.downloads.toString(),
       change: "+0%",
       icon: TrendingUp,
       color: "text-purple-500"
     },
     {
       title: "Revenue",
-      value: "$0",
+      value: `${stats.revenue}`,
       change: "+0%",
       icon: BarChart3,
       color: "text-orange-500"
@@ -153,7 +193,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {stats.map((stat, index) => (
+          {statsData.map((stat, index) => (
             <Card key={index} className="hover:shadow-lg transition-shadow">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">

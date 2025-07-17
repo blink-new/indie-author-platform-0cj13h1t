@@ -8,7 +8,7 @@ import { Textarea } from '../components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog'
 import { Switch } from '../components/ui/switch'
-import { blink, supabase } from '../lib/blink'
+import { blink, getUserBooks, createBook, deleteBook as deleteBookFromDB, uploadFile, type Book } from '../lib/blink'
 import { 
   BookOpen, 
   Plus,
@@ -25,22 +25,6 @@ import {
   Clock
 } from 'lucide-react'
 import { useToast } from '../hooks/use-toast'
-
-interface Book {
-  id: string
-  title: string
-  description?: string
-  book_type: 'arc' | 'beta' | 'sale'
-  price?: number
-  file_url?: string
-  file_type?: string
-  cover_image_url?: string
-  expiration_date?: string
-  collect_emails: boolean
-  download_count: number
-  created_at: string
-  updated_at: string
-}
 
 interface User {
   id: string
@@ -71,14 +55,8 @@ export default function BookManagement() {
   const loadBooks = useCallback(async () => {
     if (!user?.id) return
     try {
-      const { data: userBooks, error } = await supabase
-        .from('books')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-      
-      if (error) throw error
-      setBooks(userBooks || [])
+      const userBooks = await getUserBooks(user.id)
+      setBooks(userBooks)
     } catch (error) {
       console.error('Error loading books:', error)
       toast({
@@ -102,18 +80,8 @@ export default function BookManagement() {
   }, [loadBooks])
 
   const handleFileUpload = async (file: File, type: 'book' | 'cover'): Promise<string> => {
-    const fileName = `${type}s/${user?.id}/${Date.now()}-${file.name}`
-    const { data, error } = await supabase.storage
-      .from('books')
-      .upload(fileName, file, { upsert: true })
-    
-    if (error) throw error
-    
-    const { data: { publicUrl } } = supabase.storage
-      .from('books')
-      .getPublicUrl(data.path)
-    
-    return publicUrl
+    const fileName = `${user?.id}/${type}s/${Date.now()}-${file.name}`
+    return await uploadFile(file, fileName)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -135,19 +103,21 @@ export default function BookManagement() {
       const bookData = {
         user_id: user.id,
         title: formData.title,
-        description: formData.description || null,
+        description: formData.description || undefined,
         book_type: formData.book_type,
-        price: formData.price ? parseFloat(formData.price) : null,
+        price: formData.price ? parseFloat(formData.price) : undefined,
         file_url: fileUrl,
         file_type: bookFile.type,
-        cover_image_url: coverImageUrl || null,
-        expiration_date: formData.expiration_date || null,
+        file_size: bookFile.size,
+        cover_image_url: coverImageUrl || undefined,
+        expiration_date: formData.expiration_date || undefined,
         collect_emails: formData.collect_emails,
-        download_count: 0
+        download_count: 0,
+        is_active: true,
+        metadata: {}
       }
 
-      const { error } = await supabase.from('books').insert(bookData)
-      if (error) throw error
+      await createBook(bookData)
       
       toast({
         title: "Success!",
@@ -179,10 +149,9 @@ export default function BookManagement() {
     }
   }
 
-  const deleteBook = async (bookId: string) => {
+  const handleDeleteBook = async (bookId: string) => {
     try {
-      const { error } = await supabase.from('books').delete().eq('id', bookId)
-      if (error) throw error
+      await deleteBookFromDB(bookId)
       
       toast({
         title: "Success",
@@ -468,7 +437,7 @@ export default function BookManagement() {
                       <Button 
                         size="sm" 
                         variant="outline" 
-                        onClick={() => deleteBook(book.id)}
+                        onClick={() => handleDeleteBook(book.id)}
                         className="text-destructive hover:text-destructive"
                       >
                         <Trash2 className="w-4 h-4" />

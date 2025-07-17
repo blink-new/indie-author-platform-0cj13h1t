@@ -3,6 +3,7 @@ import { ThemeProvider } from './contexts/ThemeContext'
 import LandingPage from './pages/LandingPage'
 import Dashboard from './pages/Dashboard'
 import BookManagement from './pages/BookManagement'
+import EmailCampaigns from './pages/EmailCampaigns'
 import Sidebar from './components/layout/Sidebar'
 import { Toaster } from './components/ui/toaster'
 import { blink } from './lib/blink'
@@ -75,12 +76,7 @@ function App() {
           ) : currentPage === 'books' ? (
             <BookManagement />
           ) : currentPage === 'campaigns' ? (
-            <div className="min-h-screen flex items-center justify-center">
-              <div className="text-center">
-                <h2 className="text-2xl font-bold mb-4">Email Campaigns</h2>
-                <p className="text-muted-foreground">Coming soon...</p>
-              </div>
-            </div>
+            <EmailCampaigns />
           ) : currentPage === 'analytics' ? (
             <div className="min-h-screen flex items-center justify-center">
               <div className="text-center">
